@@ -402,15 +402,15 @@ msg_ok "Installed Node.js 20"
 
 # ── Install MLB Dashboard ────────────────────────────────────────────────────
 msg_info "Installing ${APP}"
-pct exec "$CT_ID" -- bash -c "mkdir -p /opt/baseball/public /data" &>/dev/null
+pct exec "$CT_ID" -- bash -c "mkdir -p /opt/baseball /data" &>/dev/null
 
 GITHUB_RAW="https://raw.githubusercontent.com/qbeaubouef/baseball/main"
 pct exec "$CT_ID" -- bash -c "
   curl -fsSL ${GITHUB_RAW}/server.js -o /opt/baseball/server.js 2>/dev/null
-  curl -fsSL ${GITHUB_RAW}/public/mlb_index.html -o /opt/baseball/public/mlb_index.html 2>/dev/null
+  curl -fsSL ${GITHUB_RAW}/mlb_index.html -o /opt/baseball/mlb_index.html 2>/dev/null
   curl -fsSL ${GITHUB_RAW}/team_colors_corrected_v3.csv -o /opt/baseball/team_colors_corrected_v3.csv 2>/dev/null
-  if [ ! -s /opt/baseball/public/mlb_index.html ]; then
-    echo '<html><body style=\"background:#0a0e14;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh\"><div style=\"text-align:center\"><h1>⚾ MLB Dashboard</h1><p>Upload mlb_index.html and server.js to GitHub repo</p></div></body></html>' > /opt/baseball/public/mlb_index.html
+  if [ ! -s /opt/baseball/mlb_index.html ]; then
+    echo '<html><body style=\"background:#0a0e14;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh\"><div style=\"text-align:center\"><h1>⚾ MLB Dashboard</h1><p>Upload mlb_index.html and server.js to GitHub repo</p></div></body></html>' > /opt/baseball/mlb_index.html
   fi
 " &>/dev/null
 
