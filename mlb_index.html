@@ -38,15 +38,14 @@ button{cursor:pointer;font-family:var(--font-body)}
 #pin-gate{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;background:var(--pin-bg);padding:24px}
 .pin-logo{font-family:var(--font-display);font-size:48px;font-weight:700;letter-spacing:-1px;color:var(--text);margin-bottom:4px}
 .pin-sub{font-size:13px;color:var(--text3);margin-bottom:32px;letter-spacing:1px;text-transform:uppercase}
-.pin-dots{display:flex;gap:12px;margin-bottom:24px}
+.pin-input-wrap{position:relative;cursor:pointer;margin-bottom:8px}
+.pin-dots{display:flex;gap:12px;padding:16px 24px}
 .pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);background:transparent;transition:all 0.15s}
 .pin-dot.filled{background:var(--text);border-color:var(--text)}
 .pin-dot.error{border-color:var(--red);background:var(--red);animation:shake 0.4s}
-.pin-pad{display:grid;grid-template-columns:repeat(3,72px);gap:8px}
-.pin-btn{width:72px;height:56px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-family:var(--font-display);font-size:24px;font-weight:500;transition:all 0.1s}
-.pin-btn:active{transform:scale(0.95);background:var(--bg3)}
-.pin-btn.fn{font-size:13px;font-family:var(--font-body);color:var(--text3);border-color:transparent;background:transparent}
-.pin-error{font-size:13px;color:var(--red);margin-top:16px;height:18px}
+#pin-input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;font-size:16px;z-index:2;cursor:pointer}
+.pin-hint{font-size:12px;color:var(--text3);margin-bottom:8px}
+.pin-error{font-size:13px;color:var(--red);margin-top:8px;height:18px}
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 
 /* ── APP SHELL ── */
@@ -179,21 +178,11 @@ button{cursor:pointer;font-family:var(--font-body)}
 <div id="pin-gate">
   <div class="pin-logo">MLB</div>
   <div class="pin-sub">Dashboard</div>
-  <div class="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
-  <div class="pin-pad">
-    <button class="pin-btn" onclick="pinKey('1')">1</button>
-    <button class="pin-btn" onclick="pinKey('2')">2</button>
-    <button class="pin-btn" onclick="pinKey('3')">3</button>
-    <button class="pin-btn" onclick="pinKey('4')">4</button>
-    <button class="pin-btn" onclick="pinKey('5')">5</button>
-    <button class="pin-btn" onclick="pinKey('6')">6</button>
-    <button class="pin-btn" onclick="pinKey('7')">7</button>
-    <button class="pin-btn" onclick="pinKey('8')">8</button>
-    <button class="pin-btn" onclick="pinKey('9')">9</button>
-    <button class="pin-btn fn"></button>
-    <button class="pin-btn" onclick="pinKey('0')">0</button>
-    <button class="pin-btn fn" onclick="pinDel()">&#9003;</button>
+  <div class="pin-input-wrap" onclick="document.getElementById('pin-input').focus()">
+    <input id="pin-input" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" autofocus>
+    <div class="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
   </div>
+  <div class="pin-hint">Tap to enter PIN</div>
   <div class="pin-error" id="pin-error"></div>
 </div>
 
@@ -258,7 +247,6 @@ async function loadTeamColors() {
 //  AUTH
 // ══════════════════════════════════════════
 let authToken = localStorage.getItem('mlb_token');
-let pinEntry = '';
 
 async function checkAuth() {
   if (!authToken) return false;
@@ -282,47 +270,55 @@ async function doAuth(pin) {
   } catch (e) { return { ok: false, error: 'network' }; }
 }
 
-function updateDots() {
+function updateDots(val) {
   document.querySelectorAll('.pin-dot').forEach((d, i) => {
-    d.classList.toggle('filled', i < pinEntry.length);
+    d.classList.toggle('filled', i < val.length);
     d.classList.remove('error');
   });
 }
 
-function pinKey(n) {
-  if (pinEntry.length >= 4) return;
-  pinEntry += n;
-  updateDots();
-  if (pinEntry.length === 4) submitPin();
+function showPinError(msg) {
+  const dots = document.querySelectorAll('.pin-dot');
+  dots.forEach(d => d.classList.add('error'));
+  document.getElementById('pin-error').textContent = msg;
+  const input = document.getElementById('pin-input');
+  setTimeout(() => {
+    input.value = '';
+    updateDots('');
+  }, 600);
 }
 
-function pinDel() {
-  pinEntry = pinEntry.slice(0, -1);
-  updateDots();
-  document.getElementById('pin-error').textContent = '';
-}
-
-async function submitPin() {
-  const res = await doAuth(pinEntry);
+async function submitPin(pin) {
+  const res = await doAuth(pin);
   if (res.ok) {
     document.getElementById('pin-gate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     initApp();
   } else {
-    document.querySelectorAll('.pin-dot').forEach(d => d.classList.add('error'));
-    const errEl = document.getElementById('pin-error');
-    if (res.error === 'locked') errEl.textContent = `Locked. Try again in ${res.remaining}s`;
-    else if (res.attemptsLeft !== undefined) errEl.textContent = `Wrong PIN. ${res.attemptsLeft} attempts left`;
-    else errEl.textContent = 'Connection error';
-    setTimeout(() => { pinEntry = ''; updateDots(); }, 600);
+    if (res.error === 'locked') showPinError(`Locked. Try again in ${res.remaining}s`);
+    else if (res.attemptsLeft !== undefined) showPinError(`Wrong PIN. ${res.attemptsLeft} attempts left`);
+    else showPinError('Connection error');
   }
 }
 
-// Keyboard support for PIN
-document.addEventListener('keydown', e => {
-  if (document.getElementById('pin-gate').style.display === 'none') return;
-  if (e.key >= '0' && e.key <= '9') pinKey(e.key);
-  else if (e.key === 'Backspace') pinDel();
+// PIN input handler
+const pinInput = document.getElementById('pin-input');
+pinInput.addEventListener('input', (e) => {
+  // Strip non-numeric
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+  const val = e.target.value;
+  updateDots(val);
+  document.getElementById('pin-error').textContent = '';
+  if (val.length === 4) submitPin(val);
+});
+
+// Auto-focus on page load
+pinInput.focus();
+// Re-focus if they tap outside
+document.getElementById('pin-gate').addEventListener('click', () => {
+  if (document.getElementById('pin-gate').style.display !== 'none') {
+    pinInput.focus();
+  }
 });
 
 // ══════════════════════════════════════════
