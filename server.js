@@ -12,7 +12,6 @@ const DATA_DIR = process.env.DATA_DIR || '/data';
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
 // ══════════════════════════════════════════
 //  TEAM COLORS — parsed from CSV at startup
@@ -21,7 +20,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 let teamColors = {};
 
 function parseColorsCSV() {
-  // Look for CSV in app dir first, then data dir
   const candidates = [
     path.join(__dirname, 'team_colors_corrected_v3.csv'),
     path.join(DATA_DIR, 'team_colors_corrected_v3.csv')
@@ -39,7 +37,6 @@ function parseColorsCSV() {
   const lines = raw.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return;
 
-  // Parse header
   const header = lines[0].split(',').map(h => h.trim());
   const iType = header.indexOf('Type');
   const iTeam = header.indexOf('Team');
@@ -55,7 +52,6 @@ function parseColorsCSV() {
 
   const teams = {};
   for (let i = 1; i < lines.length; i++) {
-    // Handle quoted fields (some team names have commas)
     const fields = [];
     let current = '';
     let inQuotes = false;
@@ -90,7 +86,7 @@ const sessions = new Map();
 const loginAttempts = new Map();
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 5 * 60 * 1000;
-const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 
 function authMiddleware(req, res, next) {
   const token = req.headers['x-auth-token'];
@@ -153,7 +149,6 @@ app.get('/api/colors', authMiddleware, (req, res) => {
   res.json({ teams: teamColors });
 });
 
-// POST to reload colors from CSV without restarting
 app.post('/api/colors/reload', authMiddleware, (req, res) => {
   parseColorsCSV();
   res.json({ teams: teamColors, count: Object.keys(teamColors).length });
@@ -167,7 +162,7 @@ const MLB_BASE = 'https://statsapi.mlb.com';
 const cache = {
   standings: { data: null, updated: 0 },
   schedule: { data: null, updated: 0, date: null },
-  games: new Map() // gamePk -> { data, updated }
+  games: new Map()
 };
 
 async function mlbFetch(url) {
@@ -212,7 +207,6 @@ async function pollLiveGame(gamePk) {
   return data;
 }
 
-// Poll live games that are in progress
 async function pollLiveGames() {
   if (!cache.schedule.data) return;
   const dates = cache.schedule.data.dates || [];
@@ -228,7 +222,6 @@ async function pollLiveGames() {
   }
 }
 
-// Determine if we're in "game hours"
 function isGameTime() {
   if (!cache.schedule.data?.dates?.[0]) return false;
   const now = Date.now();
@@ -244,14 +237,12 @@ function isGameTime() {
   });
 }
 
-// ── Polling intervals ──
 setInterval(pollStandings, 5 * 60 * 1000);
 setInterval(async () => {
   await pollSchedule();
   if (isGameTime()) await pollLiveGames();
 }, 30 * 1000);
 
-// Initial fetch (non-blocking)
 (async () => {
   console.log('[MLB] Initial data fetch...');
   await Promise.allSettled([pollStandings(), pollSchedule()]);
@@ -298,9 +289,9 @@ app.get('/api/game/:id', authMiddleware, async (req, res) => {
   res.json({ game: data, updated: Date.now() });
 });
 
-// Catch-all: serve mlb_index.html
-app.get('/{*splat}', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'mlb_index.html'));
+// Serve mlb_index.html for all non-API routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'mlb_index.html'));
 });
 
 app.listen(PORT, () => {
