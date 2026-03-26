@@ -35,18 +35,22 @@
 body{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
 button{cursor:pointer;font-family:var(--font-body)}
 /* ── PIN GATE ── */
-#pin-gate{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;background:var(--pin-bg);padding:24px}
-.pin-logo{font-family:var(--font-display);font-size:48px;font-weight:700;letter-spacing:-1px;color:var(--text);margin-bottom:4px}
-.pin-sub{font-size:13px;color:var(--text3);margin-bottom:32px;letter-spacing:1px;text-transform:uppercase}
-.pin-input-wrap{position:relative;cursor:pointer;margin-bottom:8px}
-.pin-dots{display:flex;gap:12px;padding:16px 24px}
-.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);background:transparent;transition:all 0.15s}
-.pin-dot.filled{background:var(--text);border-color:var(--text)}
-.pin-dot.error{border-color:var(--red);background:var(--red);animation:shake 0.4s}
-#pin-input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;font-size:16px;z-index:2;cursor:pointer}
-.pin-hint{font-size:12px;color:var(--text3);margin-bottom:8px}
-.pin-error{font-size:13px;color:var(--red);margin-top:8px;height:18px}
-@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+#pin-gate{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;background:var(--pin-bg);padding:20px;text-align:center}
+.gate-logo{font-family:var(--font-display);font-size:56px;font-weight:700;letter-spacing:-1px;color:var(--text);margin-bottom:4px}
+.gate-sub{font-family:var(--font-display);font-size:13px;font-weight:500;letter-spacing:4px;color:var(--text3);text-transform:uppercase;margin-bottom:28px}
+#pin-gate input{width:100%;max-width:300px;padding:14px 18px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:20px;text-align:center;outline:none;transition:border-color 0.2s;margin-bottom:10px;letter-spacing:8px;font-family:var(--font-display)}
+#pin-gate input:focus{border-color:var(--text3)}
+#pin-gate input::placeholder{letter-spacing:2px;font-size:16px;color:var(--text3)}
+.gate-btn{margin-top:6px;padding:13px 48px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-family:var(--font-display);font-size:16px;font-weight:600;letter-spacing:2px;text-transform:uppercase;transition:all 0.15s}
+.gate-btn:hover{background:var(--border);color:var(--text)}
+.gate-btn:active{transform:scale(0.97)}
+.gate-err{color:var(--red);font-size:13px;margin-top:8px;min-height:20px}
+@media(prefers-color-scheme:dark){
+  #pin-gate input{background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12)}
+  #pin-gate input:focus{border-color:rgba(255,255,255,0.3)}
+  .gate-btn{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.12);color:var(--text)}
+  .gate-btn:hover{background:rgba(255,255,255,0.1)}
+}
 
 /* ── APP SHELL ── */
 #app{display:none}
@@ -176,14 +180,11 @@ button{cursor:pointer;font-family:var(--font-body)}
 
 <!-- PIN GATE -->
 <div id="pin-gate">
-  <div class="pin-logo">MLB</div>
-  <div class="pin-sub">Dashboard</div>
-  <div class="pin-input-wrap" onclick="document.getElementById('pin-input').focus()">
-    <input id="pin-input" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" autofocus>
-    <div class="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
-  </div>
-  <div class="pin-hint">Tap to enter PIN</div>
-  <div class="pin-error" id="pin-error"></div>
+  <div class="gate-logo">MLB</div>
+  <div class="gate-sub">Dashboard</div>
+  <input id="pin-input" type="tel" inputmode="numeric" maxlength="4" placeholder="Enter PIN" autocomplete="off" autofocus onkeydown="if(event.key==='Enter')checkPin()">
+  <button class="gate-btn" onclick="checkPin()">Enter</button>
+  <div class="gate-err" id="pin-error"></div>
 </div>
 
 <!-- APP -->
@@ -270,56 +271,24 @@ async function doAuth(pin) {
   } catch (e) { return { ok: false, error: 'network' }; }
 }
 
-function updateDots(val) {
-  document.querySelectorAll('.pin-dot').forEach((d, i) => {
-    d.classList.toggle('filled', i < val.length);
-    d.classList.remove('error');
-  });
-}
-
-function showPinError(msg) {
-  const dots = document.querySelectorAll('.pin-dot');
-  dots.forEach(d => d.classList.add('error'));
-  document.getElementById('pin-error').textContent = msg;
+async function checkPin() {
   const input = document.getElementById('pin-input');
-  setTimeout(() => {
-    input.value = '';
-    updateDots('');
-  }, 600);
-}
-
-async function submitPin(pin) {
+  const pin = input.value.trim();
+  if (!pin) return;
   const res = await doAuth(pin);
   if (res.ok) {
     document.getElementById('pin-gate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     initApp();
   } else {
-    if (res.error === 'locked') showPinError(`Locked. Try again in ${res.remaining}s`);
-    else if (res.attemptsLeft !== undefined) showPinError(`Wrong PIN. ${res.attemptsLeft} attempts left`);
-    else showPinError('Connection error');
+    const errEl = document.getElementById('pin-error');
+    if (res.error === 'locked') errEl.textContent = `Locked. Try again in ${res.remaining}s`;
+    else if (res.attemptsLeft !== undefined) errEl.textContent = `Wrong PIN. ${res.attemptsLeft} attempts left`;
+    else errEl.textContent = 'Connection error';
+    input.value = '';
+    input.focus();
   }
 }
-
-// PIN input handler
-const pinInput = document.getElementById('pin-input');
-pinInput.addEventListener('input', (e) => {
-  // Strip non-numeric
-  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
-  const val = e.target.value;
-  updateDots(val);
-  document.getElementById('pin-error').textContent = '';
-  if (val.length === 4) submitPin(val);
-});
-
-// Auto-focus on page load
-pinInput.focus();
-// Re-focus if they tap outside
-document.getElementById('pin-gate').addEventListener('click', () => {
-  if (document.getElementById('pin-gate').style.display !== 'none') {
-    pinInput.focus();
-  }
-});
 
 // ══════════════════════════════════════════
 //  APP STATE
