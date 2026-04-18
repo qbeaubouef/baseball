@@ -15,11 +15,12 @@ function ordinal(n) {
 
 function statusLabel(g) {
   if (g.state === 'live') {
+    // Prefer the API's own inningState if present
+    if (g.inningState === 'Middle') return `MID ${ordinal(g.inning)}`;
+    if (g.inningState === 'End') return `END ${ordinal(g.inning)}`;
+    // Fallback: outs-based heuristic
+    if (g.outs >= 3) return `${g.half === 'top' ? 'MID' : 'END'} ${ordinal(g.inning)}`;
     const half = g.half === 'top' ? 'TOP' : 'BOT';
-    // Between innings when outs>=3 can show "MID"/"END"
-    if (g.outs >= 3) {
-      return `${g.half === 'top' ? 'MID' : 'END'} ${ordinal(g.inning)}`;
-    }
     return `${half} ${ordinal(g.inning)}`;
   }
   if (g.state === 'final') {
@@ -193,13 +194,15 @@ function GameDetail({ g, teams }) {
   const leverage = g.leverage ?? 1.0;
 
   const isLive = g.state === 'live';
+  const isBetweenInnings = isLive && (g.inningState === 'Middle' || g.inningState === 'End' || (g.outs ?? 0) >= 3);
+  const showMatchup = isLive && !isBetweenInnings && pitcher.name && batter.name;
 
   return (
     <div className="detail">
       <div className="detail-grid">
         <div className="dcard matchup-card">
-          <h3>{isLive ? 'At Bat' : 'Matchup'}</h3>
-          {isLive && pitcher.name && batter.name ? (
+          <h3>{isBetweenInnings ? 'Between Innings' : isLive ? 'At Bat' : 'Matchup'}</h3>
+          {showMatchup ? (
             <div className="vs-split">
               <div className="person" style={{ color: pitchingTeam.primary }}>
                 <div className="role">PITCHING &middot; {pitchingTeam.abbr}</div>
@@ -230,7 +233,10 @@ function GameDetail({ g, teams }) {
               padding: '20px 0', fontFamily: 'var(--mono)', fontSize: 11,
               color: 'var(--ink-3)', letterSpacing: '0.1em', textTransform: 'uppercase',
             }}>
-              {g.state === 'final' ? 'Game completed' : g.state === 'pre' ? 'Game has not started' : 'Between innings'}
+              {g.state === 'final' ? 'Game completed'
+                : g.state === 'pre' ? 'Game has not started'
+                : isBetweenInnings ? `Waiting for ${g.half === 'top' ? 'bottom' : 'top'} of ${g.inning + (g.half === 'bottom' ? 1 : 0)}`
+                : 'Between batters'}
             </div>
           )}
 
@@ -292,21 +298,8 @@ function GameDetail({ g, teams }) {
             }}
           >
             <h3>Win Probability</h3>
-            <div className="wp-wrap">
-              <div className="wp-label">
-                <span style={{ color: away.primary, fontWeight: 700 }}>{away.abbr}</span>
-                <span style={{ color: home.primary, fontWeight: 700 }}>{home.abbr}</span>
-              </div>
-              <div className="wp-bar">
-                <div className="away-bar" style={{ width: `${awayWP}%` }} />
-                <div className="home-bar" style={{ width: `${homeWP}%` }} />
-                <div className="tick" style={{ left: '50%' }} />
-              </div>
-              <div className="wp-vals">
-                <span style={{ color: away.primary }}>{awayWP}%</span>
-                <span style={{ color: home.primary }}>{homeWP}%</span>
-              </div>
-            </div>
+            <WPHeader wpSeries={g.wpSeries} fallbackWp={g.winProb ?? 0.5} away={away} home={home} />
+            <WPChart wpSeries={g.wpSeries || []} away={away} home={home} />
             {isLive && (
               <div className="leverage">
                 <span>Leverage Index <b>{leverage.toFixed(1)}</b></span>
@@ -335,6 +328,12 @@ function GameDetail({ g, teams }) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Row 2: Box Score + Scoring Plays */}
+      <div className="detail-grid-2">
+        <BoxScoreCard boxscore={g.boxscore} away={away} home={home} awayScore={g.awayScore} homeScore={g.homeScore} />
+        <ScoringPlaysCard plays={g.scoringPlays || []} away={away} home={home} />
       </div>
     </div>
   );
@@ -444,5 +443,264 @@ function LineScore({ line, away, home, curInning, curHalf, awayScore, homeScore 
         </tr>
       </tbody>
     </table>
+  );
+}
+
+/* ======================================================
+ * Win Probability chart + header
+ * ==================================================== */
+function WPHeader({ wpSeries, fallbackWp, away, home }) {
+  const hasSeries = Array.isArray(wpSeries) && wpSeries.length > 0;
+  const homeWp = hasSeries ? wpSeries[wpSeries.length - 1].wp : fallbackWp;
+  const leadingIsHome = homeWp >= 0.5;
+  const team = leadingIsHome ? home : away;
+  const pct = Math.round((leadingIsHome ? homeWp : 1 - homeWp) * 100);
+
+  return (
+    <div className="wp-header">
+      <div className="wp-leader" style={{ color: team.primary }}>
+        <span className="wp-abbr">{team.abbr}</span>
+        <span className="wp-pct">{pct}<span className="wp-pct-unit">%</span></span>
+      </div>
+      <div className="wp-legend">
+        <span><i style={{ background: away.primary }} />{away.abbr}</span>
+        <span><i style={{ background: home.primary }} />{home.abbr}</span>
+      </div>
+    </div>
+  );
+}
+
+function WPChart({ wpSeries, away, home }) {
+  const n = wpSeries?.length || 0;
+  if (n < 2) {
+    return (
+      <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'var(--ink-3)', fontFamily: 'var(--mono)', fontSize: 10,
+        textTransform: 'uppercase', letterSpacing: '0.14em' }}>
+        No data yet
+      </div>
+    );
+  }
+
+  const W = 400, H = 160;
+  const pad = { top: 8, right: 10, bottom: 22, left: 32 };
+  const innerW = W - pad.left - pad.right;
+  const innerH = H - pad.top - pad.bottom;
+
+  const xScale = (i) => pad.left + (i / Math.max(n - 1, 1)) * innerW;
+  const yScale = (v) => pad.top + (1 - v) * innerH;
+
+  // Build line path
+  const linePath = wpSeries.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(1)} ${yScale(p.wp).toFixed(1)}`).join(' ');
+
+  // Home-fill area: clamp wp >= 0.5, fill between line and baseline (top-half)
+  const homeArea =
+    `M ${xScale(0).toFixed(1)} ${yScale(0.5).toFixed(1)} ` +
+    wpSeries.map((p, i) => `L ${xScale(i).toFixed(1)} ${yScale(Math.max(p.wp, 0.5)).toFixed(1)}`).join(' ') +
+    ` L ${xScale(n - 1).toFixed(1)} ${yScale(0.5).toFixed(1)} Z`;
+
+  // Away-fill area: clamp wp <= 0.5, fill between line and baseline (bottom-half)
+  const awayArea =
+    `M ${xScale(0).toFixed(1)} ${yScale(0.5).toFixed(1)} ` +
+    wpSeries.map((p, i) => `L ${xScale(i).toFixed(1)} ${yScale(Math.min(p.wp, 0.5)).toFixed(1)}`).join(' ') +
+    ` L ${xScale(n - 1).toFixed(1)} ${yScale(0.5).toFixed(1)} Z`;
+
+  // Inning tick positions: find first index where inning changes
+  const ticks = [];
+  let lastInning = 0;
+  for (let i = 0; i < n; i++) {
+    const inn = wpSeries[i].inning;
+    if (inn && inn !== lastInning) {
+      ticks.push({ inn, x: xScale(i) });
+      lastInning = inn;
+    }
+  }
+
+  // Current point
+  const lastIdx = n - 1;
+  const cx = xScale(lastIdx);
+  const cy = yScale(wpSeries[lastIdx].wp);
+  const currentIsHome = wpSeries[lastIdx].wp >= 0.5;
+  const currentColor = currentIsHome ? home.primary : away.primary;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', marginTop: 6 }}>
+      {/* Horizontal 50% reference line */}
+      <line
+        x1={pad.left} x2={W - pad.right}
+        y1={yScale(0.5)} y2={yScale(0.5)}
+        stroke="var(--rule-strong)" strokeDasharray="3,3" strokeWidth="1"
+      />
+      {/* Top/bottom border lines */}
+      <line x1={pad.left} x2={W - pad.right} y1={yScale(1)} y2={yScale(1)} stroke="var(--rule)" strokeWidth="1" />
+      <line x1={pad.left} x2={W - pad.right} y1={yScale(0)} y2={yScale(0)} stroke="var(--rule)" strokeWidth="1" />
+
+      {/* Inning vertical ticks */}
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line x1={t.x} x2={t.x} y1={pad.top} y2={H - pad.bottom} stroke="var(--rule)" strokeWidth="0.5" strokeDasharray="1,3" />
+          <text x={t.x} y={H - 8} textAnchor="middle" fill="var(--ink-3)"
+            style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.08em' }}>
+            {t.inn}
+          </text>
+        </g>
+      ))}
+
+      {/* Y-axis labels */}
+      <text x={pad.left - 6} y={yScale(1) + 3} textAnchor="end" fill="var(--ink-3)"
+        style={{ fontFamily: 'var(--mono)', fontSize: 9 }}>{home.abbr}</text>
+      <text x={pad.left - 6} y={yScale(0.5) + 3} textAnchor="end" fill="var(--ink-3)"
+        style={{ fontFamily: 'var(--mono)', fontSize: 9 }}>50</text>
+      <text x={pad.left - 6} y={yScale(0) + 3} textAnchor="end" fill="var(--ink-3)"
+        style={{ fontFamily: 'var(--mono)', fontSize: 9 }}>{away.abbr}</text>
+
+      {/* Filled areas */}
+      <path d={homeArea} fill={home.primary} opacity="0.22" />
+      <path d={awayArea} fill={away.primary} opacity="0.22" />
+
+      {/* Main line */}
+      <path d={linePath} fill="none" stroke="var(--ink-2)" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+
+      {/* Current point */}
+      <circle cx={cx} cy={cy} r="4" fill={currentColor} stroke="var(--card)" strokeWidth="2" />
+    </svg>
+  );
+}
+
+/* ======================================================
+ * Scoring Plays
+ * ==================================================== */
+function ScoringPlaysCard({ plays, away, home }) {
+  return (
+    <div className="dcard">
+      <h3>Scoring Plays</h3>
+      <div className="scoring-plays">
+        {plays.length === 0
+          ? <div style={{ color: 'var(--ink-3)', fontSize: 11, padding: '6px 0' }}>No scoring plays yet</div>
+          : plays.map((p, i) => (
+              <div key={i} className="splay">
+                <div className="sp-inn">{p.inning}</div>
+                <div className="sp-desc">{p.desc}</div>
+                <div className="sp-score">
+                  <span style={{ color: away.primary, fontWeight: 700 }}>{p.awayScore}</span>
+                  <span className="sp-sep">-</span>
+                  <span style={{ color: home.primary, fontWeight: 700 }}>{p.homeScore}</span>
+                </div>
+              </div>
+            ))
+        }
+      </div>
+    </div>
+  );
+}
+
+/* ======================================================
+ * Box Score (with team tabs)
+ * ==================================================== */
+function BoxScoreCard({ boxscore, away, home, awayScore, homeScore }) {
+  const [activeTeam, setActiveTeam] = React.useState('away');
+  if (!boxscore) return null;
+
+  const teamData = activeTeam === 'away' ? boxscore.away : boxscore.home;
+  const activeMeta = activeTeam === 'away' ? away : home;
+  const activeScore = activeTeam === 'away' ? awayScore : homeScore;
+
+  const starters = teamData.batters.filter(b => b.starter);
+  const subs = teamData.batters.filter(b => !b.starter);
+
+  // Totals
+  const totals = teamData.batters.reduce((t, b) => ({
+    ab: t.ab + (b.ab || 0), r: t.r + (b.r || 0), h: t.h + (b.h || 0),
+    rbi: t.rbi + (b.rbi || 0), bb: t.bb + (b.bb || 0), so: t.so + (b.so || 0),
+  }), { ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0 });
+
+  const pitchTotals = teamData.pitchers.reduce((t, p) => ({
+    h: t.h + (p.h || 0), r: t.r + (p.r || 0), er: t.er + (p.er || 0),
+    bb: t.bb + (p.bb || 0), so: t.so + (p.so || 0),
+  }), { h: 0, r: 0, er: 0, bb: 0, so: 0 });
+
+  return (
+    <div className="dcard boxscore-card">
+      <div className="bs-head">
+        <h3>Box Score</h3>
+        <div className="bs-tabs">
+          <button
+            className={activeTeam === 'away' ? 'active' : ''}
+            onClick={() => setActiveTeam('away')}
+            style={{ '--team-primary': away.primary, '--team-secondary': away.secondary }}
+          >{away.abbr} <span>{awayScore}</span></button>
+          <button
+            className={activeTeam === 'home' ? 'active' : ''}
+            onClick={() => setActiveTeam('home')}
+            style={{ '--team-primary': home.primary, '--team-secondary': home.secondary }}
+          >{home.abbr} <span>{homeScore}</span></button>
+        </div>
+      </div>
+
+      <div className="bs-section-label">Batters</div>
+      <table className="bs-table">
+        <thead>
+          <tr>
+            <th className="bs-pos">POS</th>
+            <th className="bs-name">Player</th>
+            <th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th><th>BA</th>
+          </tr>
+        </thead>
+        <tbody>
+          {starters.map((b, i) => (
+            <tr key={i}>
+              <td className="bs-pos">{b.pos}</td>
+              <td className="bs-name">{b.name}</td>
+              <td>{b.ab}</td><td>{b.r}</td><td>{b.h}</td><td>{b.rbi}</td><td>{b.bb}</td><td>{b.so}</td>
+              <td>{b.ba}</td>
+            </tr>
+          ))}
+          {subs.length > 0 && subs.map((b, i) => (
+            <tr key={`sub-${i}`} className="bs-sub">
+              <td className="bs-pos">{b.pos}</td>
+              <td className="bs-name">&nbsp;&nbsp;{b.name}</td>
+              <td>{b.ab}</td><td>{b.r}</td><td>{b.h}</td><td>{b.rbi}</td><td>{b.bb}</td><td>{b.so}</td>
+              <td>{b.ba}</td>
+            </tr>
+          ))}
+          <tr className="bs-totals">
+            <td colSpan={2}>TOTALS</td>
+            <td>{totals.ab}</td><td>{totals.r}</td><td>{totals.h}</td><td>{totals.rbi}</td>
+            <td>{totals.bb}</td><td>{totals.so}</td><td></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="bs-section-label">Pitchers</div>
+      <table className="bs-table pitchers">
+        <thead>
+          <tr>
+            <th className="bs-name">Player</th>
+            <th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>SO</th><th>P-S</th><th>ERA</th>
+          </tr>
+        </thead>
+        <tbody>
+          {teamData.pitchers.map((p, i) => (
+            <tr key={i}>
+              <td className="bs-name">{p.name}</td>
+              <td>{p.ip}</td><td>{p.h}</td><td>{p.r}</td><td>{p.er}</td>
+              <td>{p.bb}</td><td>{p.so}</td><td>{p.ps}</td><td>{p.era}</td>
+            </tr>
+          ))}
+          {teamData.pitchers.length === 0 && (
+            <tr><td colSpan={9} style={{ color: 'var(--ink-3)', fontSize: 10, padding: '6px 0' }}>No pitching data</td></tr>
+          )}
+          {teamData.pitchers.length > 0 && (
+            <tr className="bs-totals">
+              <td>TOTALS</td>
+              <td></td>
+              <td>{pitchTotals.h}</td><td>{pitchTotals.r}</td><td>{pitchTotals.er}</td>
+              <td>{pitchTotals.bb}</td><td>{pitchTotals.so}</td>
+              <td></td><td></td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
