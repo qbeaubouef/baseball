@@ -1,0 +1,20 @@
+{
+  "name": "dugout-mlb-tracker",
+  "version": "1.0.0",
+  "description": "Dugout MLB tracker - live scoreboard, standings, and playoff picture wired to the MLB Stats API and ESPN WP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qbeaubouef/baseball"
+  }
+}
