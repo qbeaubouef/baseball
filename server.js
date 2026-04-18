@@ -258,6 +258,16 @@ function broadcastString(broadcasts) {
   return [...new Set(list)].slice(0, 3).join(' \u00B7 ');
 }
 
+// Map MLB Stats API inningState + inningHalf into a 4-way half value
+// that Design v2 expects: 'top' | 'bottom' | 'mid' | 'end'.
+function deriveHalf(inningState, inningHalf) {
+  const s = (inningState || '').toLowerCase();
+  if (s === 'middle') return 'mid';
+  if (s === 'end') return 'end';
+  const halfRaw = (inningHalf || '').toLowerCase();
+  return halfRaw.startsWith('bot') ? 'bottom' : 'top';
+}
+
 function transformScheduleGame(g) {
   const state = classifyState(g.status);
   const ls = g.linescore || {};
@@ -266,8 +276,7 @@ function transformScheduleGame(g) {
   const awayAbbr = ID_TO_ABBR[away.team?.id] || (away.team?.abbreviation || '').toUpperCase();
   const homeAbbr = ID_TO_ABBR[home.team?.id] || (home.team?.abbreviation || '').toUpperCase();
 
-  const halfRaw = (ls.inningHalf || ls.halfInning || '').toLowerCase();
-  const half = halfRaw.startsWith('bot') ? 'bottom' : 'top';
+  const half = deriveHalf(ls.inningState, ls.inningHalf || ls.halfInning);
 
   const offense = ls.offense || {};
   const bases = {
@@ -404,7 +413,7 @@ function transformPlays(feed) {
       inning: `${half === 'bottom' ? 'B' : 'T'}${inning}`,
       desc: p.result?.description || '',
       atBatIndex: p.atBatIndex,
-      _delta: 0,  // filled in later from ESPN WP
+      impact: '',   // filled in mergeEspn
     };
   });
 }
@@ -418,51 +427,50 @@ function transformScoringPlays(feed) {
     return {
       inning: `${half === 'bottom' ? 'B' : 'T'}${inning}`,
       desc: p.result?.description || '',
+      atBatIndex: p.atBatIndex,
       awayScore: p.result?.awayScore ?? 0,
       homeScore: p.result?.homeScore ?? 0,
-      rbi: p.result?.rbi ?? 0,
+      impact: '',   // filled in mergeEspn
     };
   });
 }
 
-function transformBoxTeam(team) {
+// Build box-score rows matching Design v2's CollapsibleBox shape:
+// batters: [{pos, name, ab, r, h, rbi, bb, so, ba (string '.xxx')}]
+// pitchers: [{name, ip, h, r, er, bb, so, ps, era (number)}]
+function transformBoxRows(team) {
   if (!team || !team.players) return { batters: [], pitchers: [] };
 
-  // Batters: use battingOrder field to preserve starter/sub ordering
+  // Batters ordered by battingOrder field
   const batterIds = team.batters || [];
-  const seenOrders = new Map();  // battingOrder slot -> array of players in that slot
+  const batterEntries = [];
   for (const id of batterIds) {
     const p = team.players[`ID${id}`];
     if (!p) continue;
-    const order = Number(p.battingOrder || 0);
-    const slot = Math.floor(order / 100);   // 1-9
-    if (!seenOrders.has(slot)) seenOrders.set(slot, []);
-    seenOrders.get(slot).push(p);
+    batterEntries.push(p);
   }
-  const batters = [];
-  const slots = [...seenOrders.keys()].sort((a, b) => a - b);
-  for (const slot of slots) {
-    const players = seenOrders.get(slot).sort((a, b) => Number(a.battingOrder) - Number(b.battingOrder));
-    for (const p of players) {
-      const today = p.stats?.batting || {};
-      const season = p.seasonStats?.batting || {};
-      const pos = p.position?.abbreviation || (p.allPositions?.[0]?.abbreviation) || '-';
-      const isStarter = String(p.battingOrder || '').endsWith('00');
-      batters.push({
-        pos,
-        name: p.person?.fullName || '',
-        ab: today.atBats ?? 0,
-        r: today.runs ?? 0,
-        h: today.hits ?? 0,
-        rbi: today.rbi ?? 0,
-        bb: today.baseOnBalls ?? 0,
-        so: today.strikeOuts ?? 0,
-        ba: season.avg || '.000',
-        slot,                      // 1-9 for display grouping
-        starter: isStarter,
-      });
-    }
-  }
+  // Sort by batting order, then by original appearance
+  batterEntries.sort((a, b) => Number(a.battingOrder || 999) - Number(b.battingOrder || 999));
+
+  const batters = batterEntries.map(p => {
+    const today = p.stats?.batting || {};
+    const season = p.seasonStats?.batting || {};
+    const pos = p.position?.abbreviation || (p.allPositions?.[0]?.abbreviation) || '-';
+    // Format BA as string ".xxx"
+    const avgRaw = season.avg || '.000';
+    const ba = String(avgRaw).startsWith('.') ? String(avgRaw) : `.${String(avgRaw).replace(/^0\./, '')}`;
+    return {
+      pos,
+      name: p.person?.fullName || '',
+      ab: today.atBats ?? 0,
+      r: today.runs ?? 0,
+      h: today.hits ?? 0,
+      rbi: today.rbi ?? 0,
+      bb: today.baseOnBalls ?? 0,
+      so: today.strikeOuts ?? 0,
+      ba,
+    };
+  });
 
   // Pitchers in order of appearance
   const pitcherIds = team.pitchers || [];
@@ -483,8 +491,7 @@ function transformBoxTeam(team) {
       bb: today.baseOnBalls ?? 0,
       so: today.strikeOuts ?? 0,
       ps: pitches > 0 ? `${pitches}-${strikes}` : '-',
-      era: season.era || '0.00',
-      note: p.gameStatus?.isCurrentPitcher ? 'active' : '',
+      era: Number.parseFloat(season.era || '0') || 0,   // number, Design does .toFixed(2)
     });
   }
 
@@ -531,9 +538,7 @@ function buildGameDetail(feed) {
 
   const ls = ld.linescore || {};
   const box = ld.boxscore || {};
-  const inningState = ls.inningState || '';   // 'Top' | 'Middle' | 'Bottom' | 'End'
-  const halfRaw = (ls.inningHalf || ls.halfInning || '').toLowerCase();
-  const half = halfRaw.startsWith('bot') ? 'bottom' : 'top';
+  const half = deriveHalf(ls.inningState, ls.inningHalf || ls.halfInning);
 
   // Runners on base
   const offense = ls.offense || {};
@@ -543,9 +548,9 @@ function buildGameDetail(feed) {
     third: Boolean(offense.third),
   };
 
-  // Which team is batting / fielding
-  const battingSide = half === 'top' ? 'away' : 'home';
-  const pitchingSide = half === 'top' ? 'home' : 'away';
+  // Which team is batting / fielding (only meaningful during an at-bat)
+  const battingSide = half === 'bottom' ? 'home' : 'away';  // 'top'/'mid'/'end' -> away ref
+  const pitchingSide = battingSide === 'away' ? 'home' : 'away';
 
   // Current pitcher and batter IDs from linescore.defense / offense
   const pitcherId = ls.defense?.pitcher?.id || box.teams?.[pitchingSide]?.pitchers?.slice(-1)[0];
@@ -561,6 +566,9 @@ function buildGameDetail(feed) {
   const line = transformLineScore(feed, awayAbbr, homeAbbr);
   const { onDeck, inHole } = onDeckInHole(feed);
 
+  const awayBox = transformBoxRows(box.teams?.away);
+  const homeBox = transformBoxRows(box.teams?.home);
+
   return {
     id: g.game?.pk || feed.gamePk || '',
     away: awayAbbr,
@@ -570,7 +578,7 @@ function buildGameDetail(feed) {
     state: classifyState(g.status),
     inning: ls.currentInning ?? 0,
     half,
-    inningState,
+    inningState: ls.inningState || '',
     outs: ls.outs ?? 0,
     balls: ls.balls ?? 0,
     strikes: ls.strikes ?? 0,
@@ -586,12 +594,15 @@ function buildGameDetail(feed) {
     recentPitches: transformRecentPitches(feed),
     plays: transformPlays(feed),
     scoringPlays: transformScoringPlays(feed),
-    boxscore: {
-      away: transformBoxTeam(box.teams?.away),
-      home: transformBoxTeam(box.teams?.home),
+    // Design v2 box shape: flat keys awayBatters/awayPitchers/homeBatters/homePitchers
+    box: {
+      awayBatters: awayBox.batters,
+      awayPitchers: awayBox.pitchers,
+      homeBatters: homeBox.batters,
+      homePitchers: homeBox.pitchers,
     },
-    wpSeries: [],     // filled from ESPN
-    winProb: 0.5,     // filled from ESPN
+    wpHistory: [],    // filled from ESPN: [{inning, half, wp}]
+    winProb: 0.5,     // filled from ESPN (home)
     leverage: 1.0,    // filled from ESPN
   };
 }
@@ -680,11 +691,11 @@ async function mergeEspn(detail) {
     const lastHomeWp = wpSeries[wpSeries.length - 1].homeWp;
     detail.winProb = lastHomeWp;   // Design interprets winProb as home's probability
 
-    // Full series for chart: strip out ESPN-specific fields to keep payload lean
-    detail.wpSeries = wpSeries.map(w => ({
-      wp: w.homeWp,
+    // Full series for chart in Design v2 shape: [{inning, half, wp}]
+    detail.wpHistory = wpSeries.map(w => ({
       inning: w.inning,
       half: w.half,
+      wp: w.homeWp,
     }));
 
     // Compute leverage from max |delta| over recent plays
@@ -695,27 +706,27 @@ async function mergeEspn(detail) {
     const recent = deltas.slice(-8);
     const maxRecent = recent.length ? Math.max(...recent.map(Math.abs)) : 0;
     const avgRecent = recent.length ? recent.map(Math.abs).reduce((a, b) => a + b, 0) / recent.length : 0;
-    // Scale so a 5% max swing -> ~1.0, 15% -> ~3.0, boosted by avg
     let leverage = maxRecent * 18 + avgRecent * 8;
-    // Late-inning bonus
     if (detail.inning >= 7 && Math.abs(lastHomeWp - 0.5) < 0.3) leverage *= 1.2;
     detail.leverage = Math.max(0.1, Math.min(6.0, leverage));
 
-    // Attach impact to each play by text match (best-effort)
-    for (const p of detail.plays) {
-      // Find the ESPN play whose text most resembles this play's description
-      const best = wpSeries.slice().reverse().find(w =>
-        w.desc && p.desc && (w.desc.slice(0, 40).toLowerCase() === p.desc.slice(0, 40).toLowerCase())
-      );
-      if (best) {
-        const idx = wpSeries.indexOf(best);
-        const prev = idx > 0 ? wpSeries[idx - 1].homeWp : best.homeWp;
-        p.impact = computeImpact(best.homeWp - prev);
-      } else {
-        p.impact = '';
+    // Attach impact to plays and scoringPlays by text match (best-effort)
+    const attachImpact = (arr) => {
+      for (const p of (arr || [])) {
+        const best = wpSeries.slice().reverse().find(w =>
+          w.desc && p.desc && (w.desc.slice(0, 40).toLowerCase() === p.desc.slice(0, 40).toLowerCase())
+        );
+        if (best) {
+          const idx = wpSeries.indexOf(best);
+          const prev = idx > 0 ? wpSeries[idx - 1].homeWp : best.homeWp;
+          p.impact = computeImpact(best.homeWp - prev);
+        } else {
+          p.impact = '';
+        }
       }
-    }
-    // For any without a match, leave impact blank (Scoreboard handles blanks OK)
+    };
+    attachImpact(detail.plays);
+    attachImpact(detail.scoringPlays);
   } catch (e) {
     console.warn(`[espn] merge failed for game ${detail.id}:`, e.message);
   }
