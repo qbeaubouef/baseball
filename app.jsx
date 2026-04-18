@@ -89,6 +89,7 @@
     const [scoreboard, setScoreboard] = useState(null);
     const [scoreboardErr, setScoreboardErr] = useState(null);
     const [standings, setStandings] = useState(null);
+    const [standingsErr, setStandingsErr] = useState(null);
     const [expandedDetail, setExpandedDetail] = useState(null);
 
     const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -176,7 +177,9 @@
     /* ---------- standings load (on standings/playoff tabs) ---------- */
     useEffect(() => {
       if (!unlocked || (tab !== "standings" && tab !== "playoff")) return;
-      apiJson("/api/standings").then(setStandings).catch((e) => console.error("standings load", e));
+      apiJson("/api/standings")
+        .then(data => { setStandings(data); setStandingsErr(null); })
+        .catch(e => { console.error("standings load", e); setStandingsErr(e.message || "failed to load"); });
     }, [unlocked, tab]);
 
     /* ---------- expanded game detail ---------- */
@@ -374,9 +377,14 @@
                 <div className="meta">
                   {standings && teams
                     ? `THROUGH ${todayIso.toUpperCase()} \u00B7 YOUR TEAM \u00B7 ${(myTeamObj.city || "").toUpperCase()} ${(myTeamObj.name || "").toUpperCase()}`
-                    : "LOADING..."}
+                    : standingsErr ? "ERROR" : "LOADING..."}
                 </div>
               </div>
+              {standingsErr && (
+                <div style={{ padding: "20px", color: "var(--neg)", fontFamily: "var(--mono)", fontSize: 11 }}>
+                  Could not load standings: {standingsErr}
+                </div>
+              )}
               {teams && standings && (
                 <window.Standings teams={teams} standings={standings} dense={tweaks.density === "dense"} myTeam={myTeam} />
               )}
@@ -389,6 +397,11 @@
                 <h2>Playoff Picture</h2>
                 <div className="meta">SEEDS 1-6 &middot; AS OF {todayIso.toUpperCase()}</div>
               </div>
+              {standingsErr && (
+                <div style={{ padding: "20px", color: "var(--neg)", fontFamily: "var(--mono)", fontSize: 11 }}>
+                  Could not load standings: {standingsErr}
+                </div>
+              )}
               {teams && standings && (
                 <window.PlayoffPicture teams={teams} standings={standings} myTeam={myTeam} />
               )}
@@ -574,5 +587,57 @@
     );
   }
 
-  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  /* =======================================================
+   * Error boundary - surfaces render errors instead of
+   * silently blanking the page.
+   * ===================================================== */
+  class ErrorBoundary extends React.Component {
+    constructor(props) {
+      super(props);
+      this.state = { err: null };
+    }
+    static getDerivedStateFromError(err) { return { err }; }
+    componentDidCatch(err, info) {
+      console.error("ErrorBoundary caught:", err, info);
+    }
+    render() {
+      if (this.state.err) {
+        return (
+          <div style={{
+            padding: 32, maxWidth: 720, margin: "40px auto",
+            background: "var(--card)", border: "1px solid var(--neg)",
+            borderRadius: 6, fontFamily: "var(--ui)",
+          }}>
+            <div style={{
+              fontFamily: "var(--mono)", fontSize: 10, color: "var(--neg)",
+              textTransform: "uppercase", letterSpacing: "0.18em", marginBottom: 4,
+            }}>Render error</div>
+            <h3 style={{
+              fontFamily: "var(--display)", fontSize: 22, fontWeight: 900,
+              fontStyle: "italic", margin: "0 0 12px", letterSpacing: "-0.01em",
+            }}>{String(this.state.err?.message || this.state.err || "Unknown error")}</h3>
+            <pre style={{
+              background: "var(--paper-2)", padding: 12, borderRadius: 4,
+              fontFamily: "var(--mono)", fontSize: 10, overflow: "auto",
+              maxHeight: 240, color: "var(--ink-2)", whiteSpace: "pre-wrap",
+            }}>{String(this.state.err?.stack || "")}</pre>
+            <button
+              onClick={() => this.setState({ err: null })}
+              style={{
+                marginTop: 14, padding: "8px 14px",
+                background: "var(--ink)", color: "var(--paper)",
+                border: "none", borderRadius: 4, cursor: "pointer",
+                fontFamily: "var(--ui)", fontSize: 12, fontWeight: 600,
+              }}
+            >Reset</button>
+          </div>
+        );
+      }
+      return this.props.children;
+    }
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(
+    <ErrorBoundary><App /></ErrorBoundary>
+  );
 })();
