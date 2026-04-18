@@ -285,6 +285,7 @@ function transformScheduleGame(g) {
     state,
     inning: ls.currentInning ?? 0,
     half,
+    inningState: ls.inningState || '',
     outs: ls.outs ?? 0,
     balls: ls.balls ?? 0,
     strikes: ls.strikes ?? 0,
@@ -408,6 +409,88 @@ function transformPlays(feed) {
   });
 }
 
+function transformScoringPlays(feed) {
+  const plays = feed.liveData?.plays?.allPlays || [];
+  const scoring = plays.filter(p => p.about?.isScoringPlay);
+  return scoring.map(p => {
+    const half = (p.about?.halfInning || 'top').toLowerCase();
+    const inning = p.about?.inning || 0;
+    return {
+      inning: `${half === 'bottom' ? 'B' : 'T'}${inning}`,
+      desc: p.result?.description || '',
+      awayScore: p.result?.awayScore ?? 0,
+      homeScore: p.result?.homeScore ?? 0,
+      rbi: p.result?.rbi ?? 0,
+    };
+  });
+}
+
+function transformBoxTeam(team) {
+  if (!team || !team.players) return { batters: [], pitchers: [] };
+
+  // Batters: use battingOrder field to preserve starter/sub ordering
+  const batterIds = team.batters || [];
+  const seenOrders = new Map();  // battingOrder slot -> array of players in that slot
+  for (const id of batterIds) {
+    const p = team.players[`ID${id}`];
+    if (!p) continue;
+    const order = Number(p.battingOrder || 0);
+    const slot = Math.floor(order / 100);   // 1-9
+    if (!seenOrders.has(slot)) seenOrders.set(slot, []);
+    seenOrders.get(slot).push(p);
+  }
+  const batters = [];
+  const slots = [...seenOrders.keys()].sort((a, b) => a - b);
+  for (const slot of slots) {
+    const players = seenOrders.get(slot).sort((a, b) => Number(a.battingOrder) - Number(b.battingOrder));
+    for (const p of players) {
+      const today = p.stats?.batting || {};
+      const season = p.seasonStats?.batting || {};
+      const pos = p.position?.abbreviation || (p.allPositions?.[0]?.abbreviation) || '-';
+      const isStarter = String(p.battingOrder || '').endsWith('00');
+      batters.push({
+        pos,
+        name: p.person?.fullName || '',
+        ab: today.atBats ?? 0,
+        r: today.runs ?? 0,
+        h: today.hits ?? 0,
+        rbi: today.rbi ?? 0,
+        bb: today.baseOnBalls ?? 0,
+        so: today.strikeOuts ?? 0,
+        ba: season.avg || '.000',
+        slot,                      // 1-9 for display grouping
+        starter: isStarter,
+      });
+    }
+  }
+
+  // Pitchers in order of appearance
+  const pitcherIds = team.pitchers || [];
+  const pitchers = [];
+  for (const id of pitcherIds) {
+    const p = team.players[`ID${id}`];
+    if (!p) continue;
+    const today = p.stats?.pitching || {};
+    const season = p.seasonStats?.pitching || {};
+    const pitches = today.pitchesThrown ?? today.numberOfPitches ?? 0;
+    const strikes = today.strikes ?? 0;
+    pitchers.push({
+      name: p.person?.fullName || '',
+      ip: today.inningsPitched || '0.0',
+      h: today.hits ?? 0,
+      r: today.runs ?? 0,
+      er: today.earnedRuns ?? 0,
+      bb: today.baseOnBalls ?? 0,
+      so: today.strikeOuts ?? 0,
+      ps: pitches > 0 ? `${pitches}-${strikes}` : '-',
+      era: season.era || '0.00',
+      note: p.gameStatus?.isCurrentPitcher ? 'active' : '',
+    });
+  }
+
+  return { batters, pitchers };
+}
+
 function transformRecentPitches(feed) {
   // Pull pitches from current play + last completed play (up to ~8 total)
   const plays = feed.liveData?.plays;
@@ -448,6 +531,7 @@ function buildGameDetail(feed) {
 
   const ls = ld.linescore || {};
   const box = ld.boxscore || {};
+  const inningState = ls.inningState || '';   // 'Top' | 'Middle' | 'Bottom' | 'End'
   const halfRaw = (ls.inningHalf || ls.halfInning || '').toLowerCase();
   const half = halfRaw.startsWith('bot') ? 'bottom' : 'top';
 
@@ -486,6 +570,7 @@ function buildGameDetail(feed) {
     state: classifyState(g.status),
     inning: ls.currentInning ?? 0,
     half,
+    inningState,
     outs: ls.outs ?? 0,
     balls: ls.balls ?? 0,
     strikes: ls.strikes ?? 0,
@@ -500,6 +585,12 @@ function buildGameDetail(feed) {
     line,
     recentPitches: transformRecentPitches(feed),
     plays: transformPlays(feed),
+    scoringPlays: transformScoringPlays(feed),
+    boxscore: {
+      away: transformBoxTeam(box.teams?.away),
+      home: transformBoxTeam(box.teams?.home),
+    },
+    wpSeries: [],     // filled from ESPN
     winProb: 0.5,     // filled from ESPN
     leverage: 1.0,    // filled from ESPN
   };
@@ -557,11 +648,18 @@ async function fetchEspnWp(eventId) {
   const wp = data.winprobability || [];
   const plays = (data.plays || []).reduce((m, p) => { m[p.id] = p; return m; }, {});
   // homeWinPercentage is 0..1 per play entry; play ids tie to plays array
-  return wp.map(w => ({
-    playId: w.playId,
-    homeWp: typeof w.homeWinPercentage === 'number' ? w.homeWinPercentage : 0.5,
-    desc: plays[w.playId]?.text || '',
-  }));
+  return wp.map(w => {
+    const pl = plays[w.playId] || {};
+    const periodType = (pl.period?.type?.abbreviation || pl.period?.displayValue || '').toLowerCase();
+    const half = periodType.includes('bot') ? 'bottom' : 'top';
+    return {
+      playId: w.playId,
+      homeWp: typeof w.homeWinPercentage === 'number' ? w.homeWinPercentage : 0.5,
+      desc: pl.text || '',
+      inning: pl.period?.number || 0,
+      half,
+    };
+  });
 }
 
 function computeImpact(delta) {
@@ -581,6 +679,13 @@ async function mergeEspn(detail) {
     // Current home win prob = last value
     const lastHomeWp = wpSeries[wpSeries.length - 1].homeWp;
     detail.winProb = lastHomeWp;   // Design interprets winProb as home's probability
+
+    // Full series for chart: strip out ESPN-specific fields to keep payload lean
+    detail.wpSeries = wpSeries.map(w => ({
+      wp: w.homeWp,
+      inning: w.inning,
+      half: w.half,
+    }));
 
     // Compute leverage from max |delta| over recent plays
     const deltas = [];
