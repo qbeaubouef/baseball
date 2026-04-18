@@ -202,6 +202,57 @@ html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink);
 .plays .play .pimp.pos { color: var(--pos); }
 .plays .play .pimp.neg { color: var(--neg); }
 
+/* Between-innings block */
+.between-block { padding: 10px 0 4px; }
+.between-big { font-family: var(--serif); font-size: 28px; letter-spacing: -0.01em; line-height: 1.1; margin-bottom: 6px; }
+.between-sub { font-family: var(--sans); font-size: 14px; color: var(--ink-2); margin-bottom: 10px; }
+.between-sub b { font-family: var(--cond); letter-spacing: 0.04em; font-weight: 700; }
+.between-meta { display: flex; flex-direction: column; gap: 6px; font-family: var(--mono); font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em; padding-top: 12px; margin-top: 4px; border-top: 1px dashed var(--rule); line-height: 1.5; }
+.between-meta b { color: var(--ink-2); font-weight: 700; }
+
+.game.between .live { color: var(--ink-3) !important; }
+.game.between .game-status .live.between { color: var(--warn, #c08a2e); }
+
+.mid-msg { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* Win-probability chart */
+.wp-card .wp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.wp-card .wp-header h3 { margin: 0; }
+.wp-leader { display: flex; align-items: center; gap: 8px; }
+.wp-ld-badge { width: 32px; height: 22px; display: flex; align-items: center; justify-content: center; font-family: var(--cond); font-weight: 700; font-size: 10px; letter-spacing: 0.04em; color: white; border-radius: 3px; }
+.wp-ld-pct { font-family: var(--serif); font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+
+.wpchart-wrap { padding: 4px 0; }
+.wpchart { display: block; width: 100%; height: auto; }
+.wpchart-legend { display: flex; gap: 14px; font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 6px; }
+.wpchart-legend .sw { display: inline-block; width: 16px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+/* Box score */
+.boxtbl { font-size: 11px; font-family: var(--mono); margin-bottom: 10px; }
+.boxtbl .boxhead, .boxtbl .boxrow {
+  display: grid;
+  grid-template-columns: 1.6fr repeat(7, 1fr);
+  gap: 4px;
+  padding: 5px 0;
+  align-items: center;
+}
+.boxtbl.pitchers .boxhead, .boxtbl.pitchers .boxrow {
+  grid-template-columns: 1.6fr repeat(8, 1fr);
+}
+.boxtbl .boxhead {
+  border-bottom: 1px solid var(--rule);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+.boxtbl .boxhead span:not(.bh-team),
+.boxtbl .boxrow span:not(.bh-team) { text-align: right; color: var(--ink-2); }
+.boxtbl .boxrow { border-bottom: 1px dashed var(--rule); color: var(--ink-2); }
+.boxtbl .boxrow:last-child { border-bottom: none; }
+.boxtbl .boxrow .bh-team { color: var(--ink); font-family: var(--sans); font-size: 12px; }
+.boxtbl .boxrow .bh-team b { font-family: var(--cond); font-weight: 700; color: var(--ink-3); margin-right: 6px; font-size: 10px; letter-spacing: 0.04em; }
+
 .venue-meta { font-family: var(--mono); font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--rule); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 
 .close-detail { position: absolute; top: 12px; right: 12px; background: var(--card); border: 1px solid var(--rule-strong); border-radius: 999px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ink-2); font-family: var(--mono); font-size: 14px; line-height: 1; z-index: 2; }
@@ -295,6 +346,156 @@ html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink);
 .ticket-hint { font-family: var(--mono); font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.14em; margin-top: 14px; }
 .ticket-hint .err { color: var(--live); }
 
+/* Teamified ticket override */
+.ticket.teamified {
+  grid-template-columns: 240px 1fr;
+}
+.ticket.teamified::before, .ticket.teamified::after { left: 228px; }
+.ticket.teamified .ticket-stub {
+  background: var(--tkt-primary);
+  color: var(--tkt-ink);
+  padding: 28px 22px;
+}
+.ticket.teamified .ticket-stub::after {
+  background: linear-gradient(to bottom,
+    var(--tkt-secondary) 0% 25%,
+    var(--tkt-primary) 25% 50%,
+    var(--tkt-secondary) 50% 75%,
+    var(--tkt-primary) 75% 100%);
+}
+.ticket.teamified .stub-top { display: flex; flex-direction: column; gap: 4px; }
+.ticket.teamified .stub-middle {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  padding: 10px 0;
+}
+.ticket.teamified .stub-badge {
+  width: 92px; height: 92px; border-radius: 6px;
+  background: var(--tkt-primary);
+  box-shadow: inset 0 0 0 3px var(--tkt-primary), 0 0 0 3px var(--tkt-secondary), 0 0 0 5px var(--tkt-primary);
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+  margin-bottom: 14px;
+}
+.ticket.teamified .stub-badge-abbr {
+  font-family: var(--display); font-weight: 900; font-style: italic;
+  font-size: 34px; letter-spacing: -0.02em; color: var(--tkt-ink);
+  z-index: 2;
+}
+.ticket.teamified .stub-badge-stripe {
+  position: absolute; inset: auto 0 0 0; height: 14px;
+  background: var(--tkt-secondary);
+  opacity: 0.35;
+}
+.ticket.teamified .stub-team-name {
+  font-family: var(--display); font-style: italic; font-weight: 900;
+  font-size: 24px; letter-spacing: -0.02em; line-height: 1;
+  color: var(--tkt-ink);
+}
+.ticket.teamified .stub-team-city {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; opacity: 0.75; margin-top: 4px;
+}
+.ticket.teamified .stub-bottom {
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 10px;
+  border-top: 1px dashed color-mix(in oklab, var(--tkt-ink) 40%, transparent);
+  padding-top: 10px;
+}
+.ticket.teamified .tprompt { color: var(--tkt-primary); letter-spacing: 0.18em; }
+
+.ticket-teamrow {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 16px; padding-top: 12px;
+  border-top: 1px dashed var(--rule);
+}
+.ticket-teamlabel { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-3); }
+.ticket-teamswap {
+  background: transparent; border: 1px solid var(--rule-strong); border-radius: 3px;
+  padding: 6px 10px; font-family: var(--cond); font-weight: 700; font-size: 12px;
+  letter-spacing: 0.04em; color: var(--ink); cursor: pointer;
+  display: inline-flex; gap: 8px; align-items: center;
+}
+.ticket-teamswap:hover { border-color: var(--ink); }
+.swap-chev { color: var(--ink-3); font-size: 9px; }
+
+.ticket-picker {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--rule); border-radius: 4px;
+  padding: 6px;
+  background: var(--paper-2);
+}
+.ticket-picker-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 6px;
+  background: transparent; border: 1px solid transparent; border-radius: 3px;
+  font-family: var(--sans); font-size: 11px; color: var(--ink-2);
+  cursor: pointer; text-align: left;
+}
+.ticket-picker-item:hover { background: var(--paper-3); }
+.ticket-picker-item.active { border-color: var(--tp-primary); background: color-mix(in oklab, var(--tp-primary) 8%, transparent); color: var(--ink); }
+.tpi-swatch {
+  width: 26px; height: 18px; border-radius: 2px; flex-shrink: 0;
+  color: white; font-family: var(--cond); font-weight: 700; font-size: 8px; letter-spacing: 0.03em;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Header team pick */
+.teampick-wrap { position: relative; }
+.teampick-btn { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid; }
+.tp-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.teampick-menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: var(--card); border: 1px solid var(--rule-strong); border-radius: 6px;
+  box-shadow: 0 20px 40px -12px rgba(0,0,0,0.2);
+  width: 320px; padding: 10px; z-index: 200;
+}
+.teampick-menu .tp-head { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-3); margin-bottom: 8px; }
+.tp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; max-height: 360px; overflow-y: auto; }
+.tp-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 6px; border: 1px solid transparent; background: transparent;
+  border-radius: 3px; cursor: pointer; text-align: left;
+  font-family: var(--sans); font-size: 12px; color: var(--ink-2);
+}
+.tp-item:hover { background: var(--paper-2); }
+.tp-item.active { border-color: var(--tp-primary); background: color-mix(in oklab, var(--tp-primary) 10%, transparent); color: var(--ink); }
+.tp-item-badge {
+  width: 30px; height: 20px; border-radius: 2px; flex-shrink: 0;
+  color: white; font-family: var(--cond); font-weight: 700; font-size: 9px; letter-spacing: 0.03em;
+  display: flex; align-items: center; justify-content: center;
+}
+.tp-item-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Collapsible box score */
+.collapsibox { border: 1px solid var(--rule); border-radius: 4px; margin-bottom: 8px; overflow: hidden; }
+.collapsibox-head {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 8px 10px;
+  background: var(--paper-2); border: none; cursor: pointer;
+  font-family: var(--sans); color: var(--ink); text-align: left;
+  border-bottom: 1px solid transparent;
+}
+.collapsibox[data-open="true"] .collapsibox-head {
+  border-bottom-color: var(--rule);
+  background: color-mix(in oklab, var(--team-primary) 6%, var(--paper-2));
+}
+.collapsibox-head:hover { background: color-mix(in oklab, var(--team-primary) 10%, var(--paper-2)); }
+.cb-badge {
+  width: 34px; height: 22px; border-radius: 3px;
+  color: white; font-family: var(--cond); font-weight: 700; font-size: 10px; letter-spacing: 0.04em;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.cb-name { font-family: var(--serif); font-size: 14px; font-weight: 700; flex: 1; }
+.cb-meta { font-family: var(--mono); font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em; }
+.cb-chev { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--ink-3); width: 16px; text-align: center; }
+.collapsibox-body { padding: 10px 10px 6px; }
+.cb-subhead { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-3); font-weight: 700; margin-bottom: 6px; }
+
 /* Mobile */
 @media (max-width: 860px) {
   .masthead-inner { padding: 12px 16px; grid-template-columns: auto 1fr auto; gap: 10px; }
@@ -353,71 +554,3 @@ html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink);
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 4px; }
-
-/* =========================================================
- * WP chart
- * ======================================================= */
-.wp-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2px; }
-.wp-leader { display: flex; align-items: baseline; gap: 10px; }
-.wp-leader .wp-abbr { font-family: var(--display); font-weight: 900; font-style: italic; font-size: 22px; letter-spacing: -0.01em; }
-.wp-leader .wp-pct { font-family: var(--display); font-weight: 900; font-size: 32px; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--ink); }
-.wp-leader .wp-pct-unit { font-family: var(--mono); font-size: 13px; color: var(--ink-3); font-weight: 600; margin-left: 1px; }
-.wp-legend { display: flex; gap: 10px; font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-3); }
-.wp-legend span { display: flex; align-items: center; gap: 4px; }
-.wp-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
-
-/* =========================================================
- * Second row (box score + scoring plays)
- * ======================================================= */
-.detail-grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-top: 20px; }
-@media (max-width: 860px) { .detail-grid-2 { grid-template-columns: 1fr; gap: 14px; } }
-
-/* =========================================================
- * Box Score
- * ======================================================= */
-.boxscore-card .bs-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--rule); padding-bottom: 8px; margin-bottom: 12px; }
-.boxscore-card .bs-head h3 { border-bottom: none; padding-bottom: 0; margin: 0; }
-.bs-tabs { display: flex; gap: 4px; }
-.bs-tabs button {
-  background: var(--paper-2); border: 1px solid var(--rule); border-radius: 3px;
-  padding: 5px 10px; font-family: var(--mono); font-size: 11px; font-weight: 700;
-  letter-spacing: 0.08em; color: var(--ink-2); cursor: pointer; display: flex; align-items: baseline; gap: 8px;
-}
-.bs-tabs button span { font-family: var(--display); font-size: 14px; font-weight: 900; letter-spacing: -0.01em; color: var(--ink-3); }
-.bs-tabs button.active { background: var(--team-primary); color: var(--team-ink, #fff); border-color: var(--team-primary); }
-.bs-tabs button.active span { color: rgba(255,255,255,0.9); }
-.bs-tabs button:hover:not(.active) { border-color: var(--team-primary); color: var(--ink); }
-
-.bs-section-label { font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.18em; color: var(--ink-3); margin: 6px 0 4px; font-weight: 700; }
-.bs-section-label:not(:first-of-type) { margin-top: 14px; }
-
-.bs-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
-.bs-table th, .bs-table td { padding: 5px 4px; text-align: right; border-bottom: 1px solid var(--rule); }
-.bs-table th { font-size: 9px; color: var(--ink-3); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding-top: 2px; padding-bottom: 4px; }
-.bs-table th.bs-pos, .bs-table td.bs-pos { width: 30px; text-align: left; color: var(--ink-3); font-weight: 700; }
-.bs-table th.bs-name, .bs-table td.bs-name { text-align: left; font-family: var(--ui); font-weight: 500; color: var(--ink); padding-left: 4px; }
-.bs-table tr.bs-sub td.bs-name { color: var(--ink-2); font-style: italic; font-weight: 400; font-size: 10.5px; }
-.bs-table tr.bs-sub td { background: rgba(0,0,0,0.02); }
-html[data-theme="dark"] .bs-table tr.bs-sub td, html[data-theme="auto"].is-dark .bs-table tr.bs-sub td { background: rgba(255,255,255,0.03); }
-.bs-table tr.bs-totals td { font-weight: 700; color: var(--ink); border-top: 1px solid var(--rule-strong); border-bottom: none; padding-top: 7px; }
-.bs-table tr.bs-totals td:first-child { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; color: var(--ink-3); text-transform: uppercase; }
-
-/* =========================================================
- * Scoring Plays
- * ======================================================= */
-.scoring-plays { max-height: 420px; overflow-y: auto; }
-.scoring-plays .splay { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--rule); font-size: 12px; align-items: baseline; }
-.scoring-plays .splay:last-child { border-bottom: none; }
-.scoring-plays .splay .sp-inn { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.08em; font-weight: 700; }
-.scoring-plays .splay .sp-desc { color: var(--ink-2); line-height: 1.45; }
-.scoring-plays .splay .sp-score { font-family: var(--mono); font-size: 13px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.scoring-plays .splay .sp-score .sp-sep { color: var(--ink-3); margin: 0 3px; font-weight: 400; }
-
-/* Mobile tightening */
-@media (max-width: 860px) {
-  .wp-leader .wp-pct { font-size: 26px; }
-  .wp-leader .wp-abbr { font-size: 18px; }
-  .bs-table th, .bs-table td { padding: 4px 3px; font-size: 10px; }
-  .bs-table th.bs-name, .bs-table td.bs-name { padding-left: 2px; font-size: 11px; }
-  .boxscore-card .bs-head { flex-direction: column; align-items: flex-start; gap: 8px; }
-}
